@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "A standard 3 teir stack with an RDS backend and Auto Scaling, using Ansible for provisioning.",
+    "Description": "A standard 2 tier stack with Auto Scaling, using Ansible for provisioning.",
     "Parameters": {
         "VPC": {
             "Description": "This is the VPC the stack will be deployed inside.",
@@ -80,62 +80,6 @@
             "Description": "Security groups to apply to the ELB.",
             "Type": "List<AWS::EC2::SecurityGroup::Id>"
         },
-        "DatabaseInstanceType": {
-            "Description": "The instance type to use for the database.",
-            "Type": "String",
-            "AllowedValues": [
-                "db.t2.micro",
-                "db.t2.small",
-                "db.t2.medium",
-                "db.t2.large",
-                "db.m4.large",
-                "db.m4.xlarge",
-                "db.m4.2xlarge",
-                "db.m4.4xlarge",
-                "db.m4.10xlarge",
-                "db.r3.large",
-                "db.r3.xlarge",
-                "db.r3.2xlarge",
-                "db.r3.4xlarge",
-                "db.r3.8xlarge"
-            ]
-        },
-        "DatabaseName": {
-            "Description": "The name of the initial database to generate.",
-            "Type": "String",
-            "MinLength": "1",
-            "MaxLength": "64",
-            "AllowedPattern": "[a-zA-Z0-9$_]+",
-            "ConstraintDescription": "must contain only alphanumeric characters, $, or _."
-        },
-        "DatabaseUsername": {
-            "Description": "The database admin account user name.",
-            "Type": "String",
-            "MinLength": "1",
-            "MaxLength": "16",
-            "AllowedPattern": "[a-zA-Z0-9]+",
-            "ConstraintDescription": "must contain only alphanumeric characters."
-        },
-        "DatabasePassword": {
-            "NoEcho": "true",
-            "Description": "The database admin account password.",
-            "Type": "String",
-            "MinLength": "8",
-            "MaxLength": "41",
-            "AllowedPattern": "[a-zA-Z0-9]+",
-            "ConstraintDescription": "must contain only alphanumeric characters."
-        },
-        "DatabaseVolumeSize": {
-            "Description": "The size of the database volume (in GB), larger is better as changes may require downtime.",
-            "Type": "Number",
-            "MinValue": 10,
-            "MaxValue": 1024,
-            "ConstraintDescription": "must be between 10 and 1024 GB."
-        },
-        "DatabaseSecurityGroups": {
-            "Description": "Security groups to apply to the RDS instances.",
-            "Type": "List<AWS::EC2::SecurityGroup::Id>"
-        },
         "GitRepository": {
             "Description": "URL of the applications git repository.",
             "Type": "String",
@@ -185,19 +129,6 @@
                 },
                 {
                     "Label": {
-                        "default": "Database Configuration"
-                    },
-                    "Parameters": [
-                        "DatabaseInstanceType",
-                        "DatabaseName",
-                        "DatabaseUsername",
-                        "DatabasePassword",
-                        "DatabaseVolumeSize",
-                        "DatabaseSecurityGroups"
-                    ]
-                },
-                {
-                    "Label": {
                         "default": "Provisioning Configuration"
                     },
                     "Parameters": [
@@ -242,21 +173,6 @@
                 },
                 "ElasticLoadBalancingSecurityGroups": {
                     "default": "ELB Security Groups"
-                },
-                "DatabaseInstanceType": {
-                    "default": "Database Instance Type"
-                },
-                "DatabaseUsername": {
-                    "default": "Database Usernamename"
-                },
-                "DatabasePassword": {
-                    "default": "Database Password"
-                },
-                "DatabaseVolumeSize": {
-                    "default": "Database Volume Size"
-                },
-                "DatabaseSecurityGroups": {
-                    "default": "Database Security Groups"
                 },
                 "GitRepository": {
                     "default": "Git Repository"
@@ -459,40 +375,6 @@
         }
     },
     "Resources": {
-        "DatabaseSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Managed by CloudFormation.",
-                "SubnetIds": {
-                    "Ref": "PrivateSubnets"
-                },
-                "Tags": [
-                    {
-                        "Key": "systemCode",
-                        "Value": {
-                            "Ref": "SystemCode"
-                        }
-                    },
-                    {
-                        "Key": "environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "teamDL",
-                        "Value": {
-                            "Ref": "TeamEmail"
-                        }
-                    }
-                ]
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "a01ef042-a7b7-4786-b736-384b046ddf9b"
-                }
-            }
-        },
         "ElasticLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
             "Properties": {
@@ -509,12 +391,13 @@
                 "Subnets": {
                     "Ref": "PublicSubnets"
                 },
+                "CrossZone": true,
                 "HealthCheck": {
-                    "HealthyThreshold": "3",
-                    "Interval": "30",
+                    "HealthyThreshold": "2",
+                    "Interval": "5",
                     "Target": "HTTP:80/",
-                    "Timeout": "5",
-                    "UnhealthyThreshold": "5"
+                    "Timeout": "2",
+                    "UnhealthyThreshold": "2"
                 },
                 "Tags": [
                     {
@@ -649,69 +532,6 @@
                 "AWS::CloudFormation::Designer": {
                     "id": "d7e95333-6081-4bee-a6cb-3ad2451c6ea3"
                 }
-            },
-            "DependsOn": [
-                "DatabaseInstance"
-            ]
-        },
-        "DatabaseInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "AllocatedStorage": {
-                    "Ref": "DatabaseVolumeSize"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DatabaseInstanceType"
-                },
-                "DBName": {
-                    "Ref": "DatabaseName"
-                },
-                "VPCSecurityGroups": {
-                    "Ref": "DatabaseSecurityGroups"
-                },
-                "DBSubnetGroupName": {
-                    "Ref": "DatabaseSubnetGroup"
-                },
-                "Engine": "MySQL",
-                "MultiAZ": true,
-                "AutoMinorVersionUpgrade": true,
-                "MasterUserPassword": {
-                    "Ref": "DatabasePassword"
-                },
-                "MasterUsername": {
-                    "Ref": "DatabaseUsername"
-                },
-                "Tags": [
-                    {
-                        "Key": "systemCode",
-                        "Value": {
-                            "Ref": "SystemCode"
-                        }
-                    },
-                    {
-                        "Key": "environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "teamDL",
-                        "Value": {
-                            "Ref": "TeamEmail"
-                        }
-                    },
-                    {
-                        "Key": "stopSchedule",
-                        "Value": {
-                            "Ref": "StopSchedule"
-                        }
-                    }
-                ]
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
-                }
             }
         }
     },
@@ -732,29 +552,6 @@
                 ]
             },
             "Description": "Elastic Load Balancing URL"
-        },
-        "DatabaseURL": {
-            "Value": {
-                "Fn::Join": [
-                    "",
-                    [
-                        {
-                            "Fn::GetAtt": [
-                                "DatabaseInstance",
-                                "Endpoint.Address"
-                            ]
-                        },
-                        ":",
-                        {
-                            "Fn::GetAtt": [
-                                "DatabaseInstance",
-                                "Endpoint.Port"
-                            ]
-                        }
-                    ]
-                ]
-            },
-            "Description": "Database Endpoint"
         }
     }
 }
