@@ -1,0 +1,765 @@
+ {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "A standard 3 tier stack with an RDS datastore and Auto Scaling instances, using Ansible for provisioning.",
+    "Parameters": {
+        "VPC": {
+            "Description": "This is the VPC the stack will be deployed inside.",
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        "PublicSubnets": {
+            "Description": "The public subnets to assign to the Elastic Load Balancer.",
+            "Type": "List<AWS::EC2::Subnet::Id>"
+        },
+        "PrivateSubnets": {
+            "Description": "The private subnets to place application and database instances in.",
+            "Type": "List<AWS::EC2::Subnet::Id>"
+        },
+        "SystemCode": {
+            "Description": "The FT system code to tag resources with.",
+            "Type": "String",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "ConstraintDescription": "must contain only alphanumeric characters."
+        },
+        "Environment": {
+            "Description": "The environment this stack belongs to.",
+            "Type": "String",
+            "AllowedValues": [
+                "Production",
+                "Test",
+                "Integration",
+                "CI",
+                "QA",
+                "Development"
+            ]
+        },
+        "TeamEmail": {
+            "Description": "The email address of the team managing this stack.",
+            "Type": "String",
+            "AllowedPattern": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$",
+            "ConstraintDescription": "must be a valid email address."
+        },
+        "StopSchedule": {
+            "Description": "The stop schedule to apply to resources in this stack.",
+            "Type": "String"
+        },
+        "ApplicationInstanceType": {
+            "Description": "The instance type to use for the application.",
+            "Type": "String",
+            "AllowedValues": [
+                "t2.nano",
+                "t2.micro",
+                "t2.small",
+                "t2.medium",
+                "t2.large",
+                "m4.large",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m4.10xlarge"
+            ]
+        },
+        "ApplicationDesiredCapacity": {
+            "Description": "The ideal number of application instances.",
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 1,
+            "MaxValue": 1600
+        },
+        "ApplicationMaxCapacity": {
+            "Description": "The maximum number of application instances to scale to.",
+            "Type": "Number",
+            "Default": 4,
+            "MinValue": 1,
+            "MaxValue": 1600
+        },
+        "ApplicationSecurityGroups": {
+            "Description": "Security groups to apply to the application instances.",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>"
+        },
+        "ElasticLoadBalancingSecurityGroups": {
+            "Description": "Security groups to apply to the ELB.",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>"
+        },
+        "DatabaseInstanceType": {
+            "Description": "The instance type to use for the database.",
+            "Type": "String",
+            "AllowedValues": [
+                "db.t2.micro",
+                "db.t2.small",
+                "db.t2.medium",
+                "db.t2.large",
+                "db.m4.large",
+                "db.m4.xlarge",
+                "db.m4.2xlarge",
+                "db.m4.4xlarge",
+                "db.m4.10xlarge",
+                "db.r3.large",
+                "db.r3.xlarge",
+                "db.r3.2xlarge",
+                "db.r3.4xlarge",
+                "db.r3.8xlarge"
+            ]
+        },
+        "DatabaseName": {
+            "Description": "The name of the initial database to generate.",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern": "[a-zA-Z0-9$_]+",
+            "ConstraintDescription": "must contain only alphanumeric characters, $, or _."
+        },
+        "DatabaseUsername": {
+            "Description": "The database admin account user name.",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "16",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "ConstraintDescription": "must contain only alphanumeric characters."
+        },
+        "DatabasePassword": {
+            "NoEcho": "true",
+            "Description": "The database admin account password.",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "41",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "ConstraintDescription": "must contain only alphanumeric characters."
+        },
+        "DatabaseVolumeSize": {
+            "Description": "The size of the database volume (in GB), larger is better as changes may require downtime.",
+            "Type": "Number",
+            "MinValue": 10,
+            "MaxValue": 1024,
+            "ConstraintDescription": "must be between 10 and 1024 GB."
+        },
+        "DatabaseSecurityGroups": {
+            "Description": "Security groups to apply to the RDS instances.",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>"
+        },
+        "GitRepository": {
+            "Description": "URL of the applications git repository.",
+            "Type": "String",
+            "AllowedPattern": "^https?://[^\\s/$.?#].[^\\s]*$",
+            "ConstraintDescription": "must be a valid URL."
+        },
+        "AnsiblePlaybook": {
+            "Description": "Relative path to the Ansible playbook in the repository for provisioning instances with.",
+            "Type": "String"
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "VPC Information"
+                    },
+                    "Parameters": [
+                        "VPC",
+                        "PublicSubnets",
+                        "PrivateSubnets"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "System Information"
+                    },
+                    "Parameters": [
+                        "SystemCode",
+                        "Environment",
+                        "TeamEmail",
+                        "StopSchedule"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "ApplicationInstanceType",
+                        "ApplicationDesiredCapacity",
+                        "ApplicationMaxCapacity",
+                        "ApplicationSecurityGroups",
+                        "ElasticLoadBalancingSecurityGroups"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DatabaseInstanceType",
+                        "DatabaseName",
+                        "DatabaseUsername",
+                        "DatabasePassword",
+                        "DatabaseVolumeSize",
+                        "DatabaseSecurityGroups"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Provisioning Configuration"
+                    },
+                    "Parameters": [
+                        "GitRepository",
+                        "AnsiblePlaybook"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "VPC": {
+                    "default": "Pick a VPC"
+                },
+                "PublicSubnets": {
+                    "default": "Public Subnets"
+                },
+                "PrivateSubnets": {
+                    "default": "Private Subnets"
+                },
+                "SystemCode": {
+                    "default": "FT System Code"
+                },
+                "Environment": {
+                    "default": "Environment"
+                },
+                "TeamEmail": {
+                    "default": "Team Email Address"
+                },
+                "StopSchedule": {
+                    "default": "Scroogebot Stop Schedule"
+                },
+                "ApplicationInstanceType": {
+                    "default": "Application EC2 Instance Type"
+                },
+                "ApplicationDesiredCapacity": {
+                    "default": "Desired Auto Scaling Capacity"
+                },
+                "ApplicationMaxCapacity": {
+                    "default": "Max Auto Scaling Capacity"
+                },
+                "ApplicationSecurityGroups": {
+                    "default": "Application Security Groups"
+                },
+                "ElasticLoadBalancingSecurityGroups": {
+                    "default": "ELB Security Groups"
+                },
+                "DatabaseInstanceType": {
+                    "default": "Database Instance Type"
+                },
+                "DatabaseUsername": {
+                    "default": "Database Usernamename"
+                },
+                "DatabasePassword": {
+                    "default": "Database Password"
+                },
+                "DatabaseVolumeSize": {
+                    "default": "Database Volume Size"
+                },
+                "DatabaseSecurityGroups": {
+                    "default": "Database Security Groups"
+                },
+                "GitRepository": {
+                    "default": "Git Repository"
+                },
+                "AnsiblePlaybook": {
+                    "default": "Ansible Playbook"
+                }
+            }
+        },
+        "AWS::CloudFormation::Designer": {
+            "a01ef042-a7b7-4786-b736-384b046ddf9b": {
+                "size": {
+                    "width": 120,
+                    "height": 130
+                },
+                "position": {
+                    "x": 70,
+                    "y": 290
+                },
+                "z": 1,
+                "embeds": [
+                    "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
+                ]
+            },
+            "2b2b5a26-a937-4791-9f65-73a6dd80ce51": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -170,
+                    "y": 130
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "c5c27395-b08c-47fa-9000-4320ba7c2670": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -170,
+                    "y": 330
+                },
+                "z": 1,
+                "embeds": [],
+                "ismemberof": [
+                    "2b2b5a26-a937-4791-9f65-73a6dd80ce51"
+                ]
+            },
+            "740dfa0f-3722-46b1-9c9d-e937a40575c5": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -40,
+                    "y": 130
+                },
+                "z": 1,
+                "embeds": [],
+                "isrelatedto": [
+                    "2b2b5a26-a937-4791-9f65-73a6dd80ce51"
+                ]
+            },
+            "d7e95333-6081-4bee-a6cb-3ad2451c6ea3": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -40,
+                    "y": 230
+                },
+                "z": 1,
+                "embeds": [],
+                "ismemberof": [
+                    "740dfa0f-3722-46b1-9c9d-e937a40575c5"
+                ],
+                "dependson": [
+                    "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
+                ]
+            },
+            "587c8533-9734-4822-a396-4a532c9677b1": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": -40,
+                    "y": 330
+                },
+                "z": 1,
+                "embeds": [],
+                "isconnectedto": [
+                    "c5c27395-b08c-47fa-9000-4320ba7c2670"
+                ],
+                "isassociatedwith": [
+                    "d7e95333-6081-4bee-a6cb-3ad2451c6ea3"
+                ]
+            },
+            "80b641c3-f05e-43fe-8ef3-426ef46b439c": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 100,
+                    "y": 130
+                },
+                "z": 1,
+                "embeds": [],
+                "isrelatedto": [
+                    "740dfa0f-3722-46b1-9c9d-e937a40575c5"
+                ]
+            },
+            "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 100,
+                    "y": 330
+                },
+                "z": 2,
+                "parent": "a01ef042-a7b7-4786-b736-384b046ddf9b",
+                "embeds": [],
+                "ismemberof": [
+                    "80b641c3-f05e-43fe-8ef3-426ef46b439c"
+                ]
+            },
+            "7f90b1d7-f897-4dd5-aeb9-551578ef5956": {
+                "source": {
+                    "id": "d7e95333-6081-4bee-a6cb-3ad2451c6ea3"
+                },
+                "target": {
+                    "id": "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
+                },
+                "z": 11
+            }
+        }
+    },
+    "Mappings": {
+        "Regions": {
+            "us-east-1": {
+                "AMI": "ami-6869aa05"
+            },
+            "us-west-2": {
+                "AMI": "ami-7172b611"
+            },
+            "us-west-1": {
+                "AMI": "ami-31490d51"
+            },
+            "eu-west-1": {
+                "AMI": "ami-f9dd458a"
+            },
+            "eu-central-1": {
+                "AMI": "ami-ea26ce85"
+            },
+            "ap-northeast-1": {
+                "AMI": "ami-374db956"
+            },
+            "ap-northeast-2": {
+                "AMI": "ami-2b408b45"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-a59b49c6"
+            },
+            "ap-southeast-2": {
+                "AMI": "ami-dc361ebf"
+            },
+            "sa-east-1": {
+                "AMI": "ami-6dd04501"
+            },
+            "cn-north-1": {
+                "AMI": "ami-8e6aa0e3"
+            }
+        },
+        "Environments": {
+            "Production": {
+                "ShortCode": "p"
+            },
+            "Test": {
+                "ShortCode": "t"
+            },
+            "Integration": {
+                "ShortCode": "i"
+            },
+            "CI": {
+                "ShortCode": "ci"
+            },
+            "QA": {
+                "ShortCode": "qa"
+            },
+            "Development": {
+                "ShortCode": "d"
+            }
+        }
+    },
+    "Resources": {
+        "DatabaseSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Managed by CloudFormation.",
+                "SubnetIds": {
+                    "Ref": "PrivateSubnets"
+                },
+                "Tags": [
+                    {
+                        "Key": "systemCode",
+                        "Value": {
+                            "Ref": "SystemCode"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "teamDL",
+                        "Value": {
+                            "Ref": "TeamEmail"
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "a01ef042-a7b7-4786-b736-384b046ddf9b"
+                }
+            }
+        },
+        "ElasticLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "80",
+                        "InstancePort": "80",
+                        "Protocol": "HTTP"
+                    },
+                    {
+                        "LoadBalancerPort": "443",
+                        "InstancePort": "443",
+                        "Protocol": "HTTPS"
+                    }
+                ],
+                "SecurityGroups": {
+                    "Ref": "ElasticLoadBalancingSecurityGroups"
+                },
+                "Subnets": {
+                    "Ref": "PublicSubnets"
+                },
+                "HealthCheck": {
+                    "HealthyThreshold": "2",
+                    "Interval": "5",
+                    "Target": "HTTP:80/",
+                    "Timeout": "2",
+                    "UnhealthyThreshold": "2"
+                },
+                "Tags": [
+                    {
+                        "Key": "systemCode",
+                        "Value": {
+                            "Ref": "SystemCode"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "teamDL",
+                        "Value": {
+                            "Ref": "TeamEmail"
+                        }
+                    },
+                    {
+                        "Key": "stopSchedule",
+                        "Value": {
+                            "Ref": "StopSchedule"
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c5c27395-b08c-47fa-9000-4320ba7c2670"
+                }
+            }
+        },
+        "ApplicationAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "MinSize": "1",
+                "MaxSize": {
+                    "Ref": "ApplicationMaxCapacity"
+                },
+                "DesiredCapacity": {
+                    "Ref": "ApplicationDesiredCapacity"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "ElasticLoadBalancer"
+                    }
+                ],
+                "LaunchConfigurationName": {
+                    "Ref": "ApplicationLaunchConfiguration"
+                },
+                "VPCZoneIdentifier": {
+                    "Ref": "PrivateSubnets"
+                },
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": "600"
+            },
+            "UpdatePolicy": {
+                "AutoScalingReplacingUpdate": {
+                    "WillReplace": true
+                }
+            },
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": {
+                        "Ref": "ApplicationDesiredCapacity"
+                    },
+                    "Timeout": "PT10M"
+                },
+                "AutoScalingCreationPolicy": {
+                    "MinSuccessfulInstancesPercent": "100"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "587c8533-9734-4822-a396-4a532c9677b1"
+                }
+            }
+        },
+        "ApplicationLaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "Regions",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceMonitoring": false,
+                "InstanceType": {
+                    "Ref": "ApplicationInstanceType"
+                },
+                "SecurityGroups": {
+                    "Ref": "ApplicationSecurityGroups"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": "20",
+                            "DeleteOnTermination": "true"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash -e\n",
+                                "yum install -y git\n",
+                                "pip install ansible\n",
+                                "/usr/local/bin/ansible-pull --verbose",
+                                " --url ",
+                                {
+                                    "Ref": "GitRepository"
+                                },
+                                " --directory /tmp/instance-bootstrap ",
+                                {
+                                    "Ref": "AnsiblePlaybook"
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "d7e95333-6081-4bee-a6cb-3ad2451c6ea3"
+                }
+            },
+            "DependsOn": [
+                "DatabaseInstance"
+            ]
+        },
+        "DatabaseInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "AllocatedStorage": {
+                    "Ref": "DatabaseVolumeSize"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DatabaseInstanceType"
+                },
+                "DBName": {
+                    "Ref": "DatabaseName"
+                },
+                "VPCSecurityGroups": {
+                    "Ref": "DatabaseSecurityGroups"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DatabaseSubnetGroup"
+                },
+                "Engine": "MySQL",
+                "MultiAZ": true,
+                "AutoMinorVersionUpgrade": true,
+                "MasterUserPassword": {
+                    "Ref": "DatabasePassword"
+                },
+                "MasterUsername": {
+                    "Ref": "DatabaseUsername"
+                },
+                "Tags": [
+                    {
+                        "Key": "systemCode",
+                        "Value": {
+                            "Ref": "SystemCode"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "teamDL",
+                        "Value": {
+                            "Ref": "TeamEmail"
+                        }
+                    },
+                    {
+                        "Key": "stopSchedule",
+                        "Value": {
+                            "Ref": "StopSchedule"
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "WebsiteURL": {
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "http://",
+                        {
+                            "Fn::GetAtt": [
+                                "ElasticLoadBalancer",
+                                "DNSName"
+                            ]
+                        }
+                    ]
+                ]
+            },
+            "Description": "Elastic Load Balancing URL"
+        },
+        "DatabaseURL": {
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        {
+                            "Fn::GetAtt": [
+                                "DatabaseInstance",
+                                "Endpoint.Address"
+                            ]
+                        },
+                        ":",
+                        {
+                            "Fn::GetAtt": [
+                                "DatabaseInstance",
+                                "Endpoint.Port"
+                            ]
+                        }
+                    ]
+                ]
+            },
+            "Description": "Database Endpoint"
+        }
+    }
+}
