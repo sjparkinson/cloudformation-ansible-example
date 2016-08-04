@@ -1,0 +1,43 @@
+#
+# This is the configuration file for optimal performance with the Amazon AWS ELB service.
+#
+# See <URL:http://httpd.apache.org/docs/2.4/> for detailed information.
+#
+# In particular, see
+# <URL:https://aws.amazon.com/premiumsupport/knowledge-center/apache-backend-elb/>
+# for a discussion of each configuration directive.
+
+# Setting timeout to a higher value than the default ELB timeout (60 seconds)
+# helps ensure that the load balancer properly closes down idle connections.
+# If a connection is terminated by the back-end server without proper notification
+# to the load balancer, this can result in errors.
+Timeout 120
+
+# Turning on KeepAlive reduces CPU utilization and improves response time,
+# because the load balancer will not need to establish a new TCP connection for
+# every HTTP request.
+KeepAlive On
+
+# When the KeepAlive option is enabled, choose a longer timeout than the default
+# ELB idle timeout (60 seconds by default).
+KeepAliveTimeout 120
+
+# This option sets how many requests will be served by a single TCP connection
+# on Apache when KeepAlive is set. For optimal usage of resources,
+# set MaxKeepAliveRequests to 100 or higher.
+MaxKeepAliveRequests 100
+
+# This option is enabled by default, and instructs Apache to use the
+# TCP_DEFER_ACCEPT option for the connections. This can cause the TCP socket to
+# be in a "half-open" state, where the load balancer believes the connection is
+# established, but the back-end instance does not have the connection established.
+# Issues here are generally found in low-volume load balancers where connections
+# have time to "age" prior to being used.
+AcceptFilter http none
+AcceptFilter https none
+
+# Enabling the %{X-Forwarded-For}i option causes Apache to display the ELB
+# x-forwarded-for header in its logs for each request, which contains the IP
+# address of the original client. The %D option adds the time taken to complete
+# each request to the access logs.
+LogFormat "%{X-Forwarded-For}i %h %l %u %t \"%r\" %>s %b %D \"%{Referer}i\" \"%{User-Agent}i\"" combined

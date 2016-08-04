@@ -366,6 +366,7 @@
                 "Subnets": {
                     "Ref": "PublicSubnets"
                 },
+                "CrossZone": true,
                 "HealthCheck": {
                     "HealthyThreshold": "2",
                     "Interval": "5",

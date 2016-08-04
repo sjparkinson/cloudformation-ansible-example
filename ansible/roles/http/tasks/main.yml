@@ -12,5 +12,13 @@
     group: apache
     mode: 0644
 
+- name: Install the recomended Apache configuration by Amazon AWS ELB.
+  template:
+    src: elb.conf.j2
+    dest: /etc/httpd/conf.d/elb.conf
+    owner: apache
+    group: apache
+    mode: 0644
+
 - name: Start Apache on boot.
   service: name=httpd state=started enabled=yes
