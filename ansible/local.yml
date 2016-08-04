@@ -1,7 +1,9 @@
 ---
 # This playbook defines the whole application stack.
 
-# Apply common configuration to all hosts.
+# Time to provision myself.
 - hosts: localhost
   roles:
     - common
+    - http
+    - application

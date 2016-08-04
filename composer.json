@@ -1,0 +1,15 @@
+{
+    "name": "sjparkinson/cloudformation-ansible-example",
+    "description": "Example application to demonstrate CloudFormation and Ansible.",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Samuel Parkinson",
+            "email": "sam.james.parkinson@gmail.com"
+        }
+    ],
+    "require": {
+        "silex/silex": "^2.0"
+    }
+}

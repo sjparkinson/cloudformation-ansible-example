@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "A standard 3 tier stack with an RDS datastore and Auto Scaling instances, using Ansible for provisioning.",
+    "Description": "A standard 2 tier stack with Auto Scaling instances, using Ansible for provisioning.",
     "Parameters": {
         "VPC": {
             "Description": "This is the VPC the stack will be deployed inside.",
@@ -44,58 +44,6 @@
             "MinValue": 1,
             "MaxValue": 1600
         },
-        "DatabaseInstanceType": {
-            "Description": "The instance type to use for the database.",
-            "Type": "String",
-            "AllowedValues": [
-                "db.t2.micro",
-                "db.t2.small",
-                "db.t2.medium",
-                "db.t2.large",
-                "db.m4.large",
-                "db.m4.xlarge",
-                "db.m4.2xlarge",
-                "db.m4.4xlarge",
-                "db.m4.10xlarge",
-                "db.r3.large",
-                "db.r3.xlarge",
-                "db.r3.2xlarge",
-                "db.r3.4xlarge",
-                "db.r3.8xlarge"
-            ]
-        },
-        "DatabaseName": {
-            "Description": "The name of the initial database to generate.",
-            "Type": "String",
-            "MinLength": "1",
-            "MaxLength": "64",
-            "AllowedPattern": "[a-zA-Z0-9$_]+",
-            "ConstraintDescription": "must contain only alphanumeric characters, $, or _."
-        },
-        "DatabaseUsername": {
-            "Description": "The database admin account user name.",
-            "Type": "String",
-            "MinLength": "1",
-            "MaxLength": "16",
-            "AllowedPattern": "[a-zA-Z0-9]+",
-            "ConstraintDescription": "must contain only alphanumeric characters."
-        },
-        "DatabasePassword": {
-            "NoEcho": "true",
-            "Description": "The database admin account password.",
-            "Type": "String",
-            "MinLength": "8",
-            "MaxLength": "41",
-            "AllowedPattern": "[a-zA-Z0-9]+",
-            "ConstraintDescription": "must contain only alphanumeric characters."
-        },
-        "DatabaseVolumeSize": {
-            "Description": "The size of the database volume (in GB), larger is better as changes may require downtime.",
-            "Type": "Number",
-            "MinValue": 10,
-            "MaxValue": 1024,
-            "ConstraintDescription": "must be between 10 and 1024 GB."
-        },
         "GitRepository": {
             "Description": "URL of the applications git repository.",
             "Type": "String",
@@ -132,18 +80,6 @@
                 },
                 {
                     "Label": {
-                        "default": "Database Configuration"
-                    },
-                    "Parameters": [
-                        "DatabaseInstanceType",
-                        "DatabaseName",
-                        "DatabaseUsername",
-                        "DatabasePassword",
-                        "DatabaseVolumeSize"
-                    ]
-                },
-                {
-                    "Label": {
                         "default": "Provisioning Configuration"
                     },
                     "Parameters": [
@@ -170,18 +106,6 @@
                 },
                 "ApplicationMaxCapacity": {
                     "default": "Max Auto Scaling Capacity"
-                },
-                "DatabaseInstanceType": {
-                    "default": "Database Instance Type"
-                },
-                "DatabaseUsername": {
-                    "default": "Database Username"
-                },
-                "DatabasePassword": {
-                    "default": "Database Password"
-                },
-                "DatabaseVolumeSize": {
-                    "default": "Database Volume Size"
                 },
                 "GitRepository": {
                     "default": "Git Repository"
@@ -241,7 +165,7 @@
                 },
                 "position": {
                     "x": -230,
-                    "y": 130
+                    "y": 190
                 },
                 "z": 1,
                 "embeds": [],
@@ -271,7 +195,7 @@
                 },
                 "position": {
                     "x": -70,
-                    "y": 130
+                    "y": 90
                 },
                 "z": 1,
                 "embeds": [],
@@ -289,7 +213,7 @@
                 },
                 "position": {
                     "x": -70,
-                    "y": 250
+                    "y": 190
                 },
                 "z": 1,
                 "embeds": [],
@@ -382,7 +306,9 @@
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],
-                "VpcId": { "Ref": "VPC" }
+                "VpcId": {
+                    "Ref": "VPC"
+                }
             },
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
@@ -412,47 +338,13 @@
                         }
                     }
                 ],
-                "VpcId": { "Ref": "VPC" }
+                "VpcId": {
+                    "Ref": "VPC"
+                }
             },
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
                     "id": "93c821ba-9abb-4a88-824a-eae818cfa017"
-                }
-            }
-        },
-        "DatabaseSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Managed by CloudFormation.",
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": "3306",
-                        "ToPort": "3306",
-                        "SourceSecurityGroupId": {
-                            "Ref": "ApplicationSecurityGroup"
-                        }
-                    }
-                ],
-                "VpcId": { "Ref": "VPC" }
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "5bbd62be-303a-4ea6-b6a0-6f7e4530c202"
-                }
-            }
-        },
-        "DatabaseSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Managed by CloudFormation.",
-                "SubnetIds": {
-                    "Ref": "PrivateSubnets"
-                }
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "a01ef042-a7b7-4786-b736-384b046ddf9b"
                 }
             }
         },
@@ -511,22 +403,6 @@
                 },
                 "HealthCheckType": "ELB",
                 "HealthCheckGracePeriod": "600"
-            },
-            "UpdatePolicy": {
-                "AutoScalingReplacingUpdate": {
-                    "WillReplace": true
-                }
-            },
-            "CreationPolicy": {
-                "ResourceSignal": {
-                    "Count": {
-                        "Ref": "ApplicationDesiredCapacity"
-                    },
-                    "Timeout": "PT10M"
-                },
-                "AutoScalingCreationPolicy": {
-                    "MinSuccessfulInstancesPercent": "100"
-                }
             },
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
@@ -594,45 +470,6 @@
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
                     "id": "d7e95333-6081-4bee-a6cb-3ad2451c6ea3"
-                }
-            },
-            "DependsOn": [
-                "DatabaseInstance"
-            ]
-        },
-        "DatabaseInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "Engine": "MySQL",
-                "MultiAZ": true,
-                "AutoMinorVersionUpgrade": true,
-                "AllocatedStorage": {
-                    "Ref": "DatabaseVolumeSize"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DatabaseInstanceType"
-                },
-                "DBName": {
-                    "Ref": "DatabaseName"
-                },
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "DatabaseSecurityGroup"
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Ref": "DatabaseSubnetGroup"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DatabasePassword"
-                },
-                "MasterUsername": {
-                    "Ref": "DatabaseUsername"
-                }
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "62eaff04-c9f2-4a1b-93f5-6d17cef6d7a4"
                 }
             }
         }

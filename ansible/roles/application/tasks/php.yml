@@ -1,0 +1,10 @@
+---
+# Install PHP 7.
+
+- name: Install PHP 7 packages.
+  yum: name={{ item }} state=latest
+  with_items:
+    - php70
+    - php70-mbstring
+    - php70-pdo
+  notify: httpd

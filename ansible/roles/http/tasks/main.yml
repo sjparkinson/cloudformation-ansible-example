@@ -1,0 +1,16 @@
+---
+# Apache configuration.
+
+- name: Install Apache.
+  yum: name=httpd24 state=latest
+
+- name: Install Apache configuration.
+  template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+    owner: apache
+    group: apache
+    mode: 0644
+
+- name: Start Apache on boot.
+  service: name=httpd state=started enabled=yes

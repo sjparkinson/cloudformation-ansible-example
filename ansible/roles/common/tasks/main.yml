@@ -3,9 +3,3 @@
 
 - name: Upgrade all packages.
   yum: name=* state=latest
-
-- name: Install Apache.
-  yum: name=httpd state=latest
-
-- name: Start Apache on boot.
-  service: name=httpd state=started enabled=yes

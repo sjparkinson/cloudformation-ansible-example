@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "A standard 3 teir stack with an RDS backend and Auto Scaling, using Ansible for provisioning.",
+    "Description": "A standard 3 tier stack with an RDS backend and Auto Scaling, using Ansible for provisioning.",
     "Parameters": {
         "VPC": {
             "Description": "This is the VPC the stack will be deployed inside.",

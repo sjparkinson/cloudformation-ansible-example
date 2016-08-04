@@ -1,0 +1,27 @@
+---
+# Application configuration.
+
+- name: Install PHP.
+  include: php.yml
+
+- name: Create extraction directory.
+  file: path=/tmp/release state=directory mode=0755
+
+- name: Extract the release artifact.
+  unarchive:
+    src: https://s3-eu-west-1.amazonaws.com/super-octo-carnival/release.tar.gz
+    dest: /tmp/release
+    copy: no
+
+- name: Copy vendor/ to the web directory.
+  synchronize:
+    src: /tmp/release/vendor
+    dest: /var/www
+
+- name: Copy public/ to the web directory.
+  synchronize:
+    src: /tmp/release/public/
+    dest: /var/www/html/
+
+- name: Set the correct file permissions.
+  file: path=/var/www owner=apache group=apache state=directory recurse=yes
